@@ -1,0 +1,160 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                String       @id @default(uuid())
+  email             String       @unique
+  password          String
+  role              String       @default("STUDENT") // SUPER_ADMIN, LIBRARIAN, ASSISTANT_LIBRARIAN, STUDENT, FACULTY, STAFF
+  name              String
+  phone             String?
+  address           String?
+  photoUrl          String?
+  department        String?
+  course            String?
+  semester          String?
+  dateJoined        DateTime     @default(now())
+  membershipExpiry  DateTime
+  borrowLimit       Int          @default(5)
+  status            String       @default("ACTIVE") // ACTIVE, SUSPENDED, EXPIRED
+  
+  // Relations
+  issuedTransactions   Transaction[] @relation("IssuedBy")
+  returnedTransactions Transaction[] @relation("ReturnedBy")
+  transactions        Transaction[] @relation("MemberTransactions")
+  reservations        Reservation[]
+  fines               Fine[]
+  auditLogs           AuditLog[]
+  paymentsRecorded    FinePayment[] @relation("Recorder")
+  
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+model Book {
+  id              String      @id @default(uuid())
+  isbn            String      @unique
+  barcode         String      @unique
+  qrCode          String      @unique
+  title           String
+  subtitle        String?
+  authors         String      // Comma-separated
+  publisher       String
+  edition         String?
+  publicationYear Int
+  language        String      @default("English")
+  category        String
+  genre           String
+  shelfNumber     String
+  rackNumber      String
+  callNumber      String
+  vendor          String?
+  purchaseDate    DateTime?
+  purchasePrice   Float?
+  numberOfCopies  Int         @default(1)
+  availableCopies Int         @default(1)
+  coverImage      String?
+  description     String?
+  keywords        String?     // Comma-separated
+  status          String      @default("AVAILABLE") // AVAILABLE, RESERVED, RENTED, MAINTENANCE, LOST, DAMAGED
+  
+  // Relations
+  transactions    Transaction[]
+  reservations    Reservation[]
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model Transaction {
+  id            String            @id @default(uuid())
+  bookId        String
+  book          Book              @relation(fields: [bookId], references: [id])
+  memberId      String
+  member        User              @relation("MemberTransactions", fields: [memberId], references: [id])
+  issuedById    String
+  issuedBy      User              @relation("IssuedBy", fields: [issuedById], references: [id])
+  issueDate     DateTime          @default(now())
+  dueDate       DateTime
+  returnDate    DateTime?
+  returnedById  String?
+  returnedBy    User?             @relation("ReturnedBy", fields: [returnedById], references: [id])
+  status        String            @default("ISSUED") // ISSUED, RETURNED, RENEWED, OVERDUE, LOST, DAMAGED
+  renewalCount  Int               @default(0)
+  
+  // Relations
+  fines         Fine[]
+  
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+model Reservation {
+  id          String            @id @default(uuid())
+  bookId      String
+  book          Book              @relation(fields: [bookId], references: [id])
+  memberId    String
+  member        User              @relation(fields: [memberId], references: [id])
+  reserveDate DateTime          @default(now())
+  expiryDate  DateTime
+  status      String            @default("PENDING") // PENDING, FULFILLED, CANCELLED, EXPIRED
+  
+  createdAt   DateTime          @default(now())
+}
+
+model Fine {
+  id            String       @id @default(uuid())
+  transactionId String
+  transaction   Transaction  @relation(fields: [transactionId], references: [id])
+  memberId      String
+  member        User         @relation(fields: [memberId], references: [id])
+  amount        Float
+  paidAmount    Float        @default(0)
+  waivedAmount  Float        @default(0)
+  reason        String?
+  status        String       @default("UNPAID") // UNPAID, PARTIALLY_PAID, PAID, WAIVED
+  
+  // Relations
+  payments      FinePayment[]
+  
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model FinePayment {
+  id            String        @id @default(uuid())
+  fineId        String
+  fine          Fine          @relation(fields: [fineId], references: [id])
+  amountPaid    Float
+  paymentDate   DateTime      @default(now())
+  paymentMethod String        @default("CASH") // CASH, CARD, ONLINE
+  receiptNumber String        @unique
+  recordedById  String
+  recordedBy    User          @relation("Recorder", fields: [recordedById], references: [id])
+  
+  createdAt     DateTime      @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String   // e.g. "USER_LOGIN", "BOOK_ADD", "FINE_WAIVE"
+  details   String   // JSON string containing context details
+  ipAddress String?
+  
+  createdAt DateTime @default(now())
+}
+
+model Setting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+}
