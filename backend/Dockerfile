@@ -4,14 +4,16 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install
+RUN npm ci --include=dev
 
 COPY . .
 
-RUN npx prisma generate
+ENV DATABASE_URL="postgresql://user:password@localhost:5432/lms?schema=public"
+
+RUN npx --no-install prisma generate
 
 RUN npm run build
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "npx prisma db push && npm start"]
+CMD ["sh", "-c", "npx --no-install prisma db push && npm start"]
