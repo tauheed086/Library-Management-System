@@ -19,9 +19,15 @@ export const issueBook = async (req: Request, res: Response, next: NextFunction)
       return next(new AppError('Your session is invalid (User not found). Please log out and log back in.', 401));
     }
 
-    // 1. Verify Member
-    const member = await prisma.user.findUnique({
-      where: { id: memberId },
+    // 1. Verify Member (Accept ID, Name, or Email)
+    const member = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: memberId },
+          { name: { equals: memberId, mode: 'insensitive' } },
+          { email: { equals: memberId, mode: 'insensitive' } }
+        ]
+      },
       include: {
         transactions: { where: { status: { in: ['ISSUED', 'RENEWED'] } } }
       }
@@ -43,7 +49,7 @@ export const issueBook = async (req: Request, res: Response, next: NextFunction)
     // Check outstanding unpaid fines
     const outstandingFines = await prisma.fine.findMany({
       where: {
-        memberId,
+        memberId: member.id,
         status: { in: ['UNPAID', 'PARTIALLY_PAID'] }
       }
     });
@@ -58,13 +64,18 @@ export const issueBook = async (req: Request, res: Response, next: NextFunction)
       return next(new AppError(`Member has reached their borrow limit of ${member.borrowLimit} books.`, 400));
     }
 
-    // 2. Verify Book
+    // 2. Verify Book (Accept ISBN or Title)
     const book = await prisma.book.findFirst({
-      where: { isbn }
+      where: {
+        OR: [
+          { isbn },
+          { title: { equals: isbn, mode: 'insensitive' } }
+        ]
+      }
     });
 
     if (!book) {
-      return next(new AppError(`Book with ISBN ${isbn} not found`, 404));
+      return next(new AppError(`Book with ISBN or Title '${isbn}' not found`, 404));
     }
 
     if (book.availableCopies <= 0 || book.status !== 'AVAILABLE') {
@@ -86,7 +97,7 @@ export const issueBook = async (req: Request, res: Response, next: NextFunction)
       const trans = await tx.transaction.create({
         data: {
           bookId: book.id,
-          memberId,
+          memberId: member.id,
           issuedById,
           dueDate,
           status: 'ISSUED'

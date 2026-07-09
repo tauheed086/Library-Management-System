@@ -81,13 +81,13 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
     if (search) {
       const searchStr = String(search);
       where.OR = [
-        { title: { contains: searchStr } },
-        { subtitle: { contains: searchStr } },
-        { isbn: { contains: searchStr } },
-        { barcode: { contains: searchStr } },
-        { authors: { contains: searchStr } },
-        { publisher: { contains: searchStr } },
-        { keywords: { contains: searchStr } }
+        { title: { contains: searchStr, mode: 'insensitive' } },
+        { subtitle: { contains: searchStr, mode: 'insensitive' } },
+        { isbn: { contains: searchStr, mode: 'insensitive' } },
+        { barcode: { contains: searchStr, mode: 'insensitive' } },
+        { authors: { contains: searchStr, mode: 'insensitive' } },
+        { publisher: { contains: searchStr, mode: 'insensitive' } },
+        { keywords: { contains: searchStr, mode: 'insensitive' } }
       ];
     }
 

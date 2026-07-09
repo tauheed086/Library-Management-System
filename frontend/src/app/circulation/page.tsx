@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import DashboardLayout from '../../components/DashboardLayout';
@@ -34,6 +34,68 @@ export default function CirculationPage() {
   const [issueIsbn, setIssueIsbn] = useState('');
   const [issueMemberId, setIssueMemberId] = useState('');
   const [activeReturnSearch, setActiveReturnSearch] = useState('');
+
+  // Autocomplete suggestion states
+  const [bookSuggestions, setBookSuggestions] = useState<any[]>([]);
+  const [memberSuggestions, setMemberSuggestions] = useState<any[]>([]);
+  const [showBookDropdown, setShowBookDropdown] = useState(false);
+  const [showMemberDropdown, setShowMemberDropdown] = useState(false);
+  const [isBookLoading, setIsBookLoading] = useState(false);
+  const [isMemberLoading, setIsMemberLoading] = useState(false);
+
+  // Debounced search for books
+  useEffect(() => {
+    if (!issueIsbn || issueIsbn.trim().length < 2) {
+      setBookSuggestions([]);
+      return;
+    }
+    
+    const matchingSuggestion = bookSuggestions.find(
+      (b) => b.isbn === issueIsbn || b.title === issueIsbn
+    );
+    if (matchingSuggestion) return;
+
+    setIsBookLoading(true);
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const res = await api.get('/books', { search: issueIsbn, limit: 5 });
+        setBookSuggestions(res?.data || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsBookLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounce);
+  }, [issueIsbn]);
+
+  // Debounced search for members
+  useEffect(() => {
+    if (!issueMemberId || issueMemberId.trim().length < 2) {
+      setMemberSuggestions([]);
+      return;
+    }
+
+    const matchingSuggestion = memberSuggestions.find(
+      (m) => m.id === issueMemberId || m.name === issueMemberId
+    );
+    if (matchingSuggestion) return;
+
+    setIsMemberLoading(true);
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const res = await api.get('/members', { search: issueMemberId });
+        setMemberSuggestions(res?.data || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsMemberLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounce);
+  }, [issueMemberId]);
 
   // Fetch active issued transactions for Return tab & Ledger
   const { data: txResponse, isLoading: isTxLoading } = useQuery({
@@ -159,19 +221,57 @@ export default function CirculationPage() {
 
                 <form onSubmit={handleIssueSubmit} className="space-y-4 text-xs font-semibold">
                   <div className="space-y-1.5">
-                    <label className="text-slate-500">Book ISBN Code</label>
+                    <label className="text-slate-500">Book ISBN Code or Title</label>
                     <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="e.g. 978-0134685991"
-                        value={issueIsbn}
-                        onChange={(e) => setIssueIsbn(e.target.value)}
-                        className="flex-1 px-3.5 py-2.5 bg-slate-50/50 dark:bg-zinc-850/50 border border-slate-200 dark:border-zinc-800 rounded-xl outline-none focus:border-indigo-505"
-                      />
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          placeholder="e.g. 978-0134685991 or Clean Code"
+                          value={issueIsbn}
+                          onChange={(e) => {
+                            setIssueIsbn(e.target.value);
+                            setShowBookDropdown(true);
+                          }}
+                          onFocus={() => setShowBookDropdown(true)}
+                          onBlur={() => setTimeout(() => setShowBookDropdown(false), 200)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50/50 dark:bg-zinc-850/50 border border-slate-200 dark:border-zinc-800 rounded-xl outline-none focus:border-indigo-500"
+                        />
+                        {showBookDropdown && (bookSuggestions.length > 0 || isBookLoading) && (
+                          <div className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white dark:bg-zinc-850 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-lg divide-y divide-slate-100 dark:divide-zinc-800">
+                            {isBookLoading ? (
+                              <div className="p-3 text-center text-xs text-slate-400 dark:text-zinc-500 flex items-center justify-center gap-2">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                Searching books...
+                              </div>
+                            ) : (
+                              bookSuggestions.map((book) => (
+                                <div
+                                  key={book.id}
+                                  onClick={() => {
+                                    setIssueIsbn(book.isbn);
+                                    setShowBookDropdown(false);
+                                  }}
+                                  className="p-3 hover:bg-slate-50 dark:hover:bg-zinc-800/60 cursor-pointer text-left transition-colors flex flex-col gap-0.5"
+                                >
+                                  <div className="font-bold text-slate-800 dark:text-zinc-200 truncate">
+                                    {book.title}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 dark:text-zinc-500 flex justify-between items-center">
+                                    <span className="truncate">ISBN: {book.isbn} • {book.authors}</span>
+                                    <span className={`font-bold ml-2 shrink-0 ${book.availableCopies > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                      {book.availableCopies} available
+                                    </span>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={() => handleSimulateScan('978-0134685991')}
-                        className="px-3 border border-slate-200/60 dark:border-zinc-855 rounded-xl hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-500 transition-colors flex items-center gap-1 cursor-pointer"
+                        className="px-3 border border-slate-200/60 dark:border-zinc-855 rounded-xl hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-500 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
                         title="Simulate ISBN scan"
                       >
                         <ScanLine className="w-3.5 h-3.5" />
@@ -181,19 +281,58 @@ export default function CirculationPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-slate-500">Member ID</label>
+                    <label className="text-slate-500">Member ID or Name</label>
                     <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Select or enter student UUID"
-                        value={issueMemberId}
-                        onChange={(e) => setIssueMemberId(e.target.value)}
-                        className="flex-1 px-3.5 py-2.5 bg-slate-50/50 dark:bg-zinc-850/50 border border-slate-200 dark:border-zinc-800 rounded-xl outline-none focus:border-indigo-505"
-                      />
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          placeholder="Select, search, or enter student ID or name"
+                          value={issueMemberId}
+                          onChange={(e) => {
+                            setIssueMemberId(e.target.value);
+                            setShowMemberDropdown(true);
+                          }}
+                          onFocus={() => setShowMemberDropdown(true)}
+                          onBlur={() => setTimeout(() => setShowMemberDropdown(false), 200)}
+                          className="w-full px-3.5 py-2.5 bg-slate-50/50 dark:bg-zinc-850/50 border border-slate-200 dark:border-zinc-800 rounded-xl outline-none focus:border-indigo-500"
+                        />
+                        {showMemberDropdown && (memberSuggestions.length > 0 || isMemberLoading) && (
+                          <div className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white dark:bg-zinc-850 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-lg divide-y divide-slate-100 dark:divide-zinc-800">
+                            {isMemberLoading ? (
+                              <div className="p-3 text-center text-xs text-slate-400 dark:text-zinc-550 flex items-center justify-center gap-2">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                Searching members...
+                              </div>
+                            ) : (
+                              memberSuggestions.map((member) => (
+                                <div
+                                  key={member.id}
+                                  onClick={() => {
+                                    setIssueMemberId(member.id);
+                                    setShowMemberDropdown(false);
+                                  }}
+                                  className="p-3 hover:bg-slate-50 dark:hover:bg-zinc-800/60 cursor-pointer text-left transition-colors flex flex-col gap-0.5"
+                                >
+                                  <div className="font-bold text-slate-800 dark:text-zinc-200 truncate flex justify-between items-center">
+                                    <span>{member.name}</span>
+                                    <span className="text-[9px] bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-mono text-slate-500 dark:text-zinc-400 uppercase">
+                                      {member.role}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 dark:text-zinc-550 flex justify-between items-center">
+                                    <span className="truncate">{member.email}</span>
+                                    <span className="font-mono text-[9px] text-slate-400 ml-2">ID: {member.id.substring(0, 8)}...</span>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={() => handleSimulateScan('', 'student-sample-id')} // will fetch during seed or mock
-                        className="px-3 border border-slate-200/60 dark:border-zinc-855 rounded-xl hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-500 transition-colors flex items-center gap-1 cursor-pointer"
+                        className="px-3 border border-slate-200/60 dark:border-zinc-855 rounded-xl hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-500 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
                         title="Simulate membership card scan"
                       >
                         <QrCode className="w-3.5 h-3.5" />

@@ -3,6 +3,7 @@ import { prisma } from '../utils/db';
 import { AppError } from '../middleware/error.middleware';
 import * as bcrypt from 'bcryptjs';
 import { logActivity } from '../utils/audit';
+import { generateReadableUserId } from '../utils/idGenerator';
 
 export const getMembers = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -24,11 +25,11 @@ export const getMembers = async (req: Request, res: Response, next: NextFunction
     if (search) {
       const searchStr = String(search);
       where.OR = [
-        { name: { contains: searchStr } },
-        { email: { contains: searchStr } },
-        { phone: { contains: searchStr } },
-        { department: { contains: searchStr } },
-        { id: { contains: searchStr } }
+        { name: { contains: searchStr, mode: 'insensitive' } },
+        { email: { contains: searchStr, mode: 'insensitive' } },
+        { phone: { contains: searchStr, mode: 'insensitive' } },
+        { department: { contains: searchStr, mode: 'insensitive' } },
+        { id: { contains: searchStr, mode: 'insensitive' } }
       ];
     }
 
@@ -184,8 +185,11 @@ export const createMember = async (req: Request, res: Response, next: NextFuncti
     if (role === 'FACULTY') borrowLimit = 10;
     else if (role === 'STAFF') borrowLimit = 7;
 
+    const customId = await generateReadableUserId(role);
+
     const member = await prisma.user.create({
       data: {
+        id: customId,
         email,
         password: hashedPassword,
         name,

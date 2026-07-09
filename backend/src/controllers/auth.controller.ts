@@ -4,6 +4,7 @@ import * as jwt from 'jsonwebtoken';
 import { prisma } from '../utils/db';
 import { AppError } from '../middleware/error.middleware';
 import { logActivity } from '../utils/audit';
+import { generateReadableUserId } from '../utils/idGenerator';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_for_lms_system_2026_enterprise';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -32,12 +33,16 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     if (role === 'FACULTY') borrowLimit = 10;
     else if (role === 'SUPER_ADMIN' || role === 'LIBRARIAN') borrowLimit = 100;
 
+    const userRole = role || 'STUDENT';
+    const customId = await generateReadableUserId(userRole);
+
     const user = await prisma.user.create({
       data: {
+        id: customId,
         email,
         password: hashedPassword,
         name,
-        role: role || 'STUDENT',
+        role: userRole,
         phone,
         address,
         department,
