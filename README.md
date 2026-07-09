@@ -19,12 +19,23 @@ Nexus LMS is a premium, enterprise-grade Library Management System designed for 
 
 ## 🛠️ Technology Stack
 
-* **Frontend**: React 19, Next.js 15, Tailwind CSS v4, Zustand, Framer Motion, Tanstack Query
-* **Backend**: Node.js, Express, TypeScript, Prisma ORM, SQLite (zero-dependency local file database)
+* **Frontend**: React 19, Next.js 16, Tailwind CSS v4, Zustand, Framer Motion, Tanstack Query
+* **Backend**: Node.js, Express, TypeScript, Prisma ORM, PostgreSQL
 
 ---
 
 ## ⚙️ Setup and Installation
+
+### 0. Database Setup
+The backend uses PostgreSQL. For local development, start the included Postgres service:
+```bash
+docker compose up -d db
+```
+
+The local connection string is:
+```bash
+postgresql://lms_user:lms_password@localhost:5432/lms_db?schema=public
+```
 
 ### 1. Backend Setup
 1. Navigate to the `backend` folder:
@@ -35,15 +46,19 @@ Nexus LMS is a premium, enterprise-grade Library Management System designed for 
    ```bash
    npm install
    ```
-3. Set up the local SQLite database schema and generate the Prisma client:
+3. Copy the env template if needed:
+   ```bash
+   cp .env.example .env
+   ```
+4. Set up the PostgreSQL database schema and generate the Prisma client:
    ```bash
    npx prisma db push
    ```
-4. Seed mock books, settings, and users into the database:
+5. Seed mock books, settings, and users into the database:
    ```bash
    npm run prisma:seed
    ```
-5. Spin up the Express server:
+6. Spin up the Express server:
    ```bash
    npm run dev
    ```
@@ -80,9 +95,50 @@ The database comes pre-seeded with five user roles. Use the email addresses belo
 
 ---
 
+## 🌐 Free Demo Deployment
+
+Recommended free demo stack:
+
+* **Frontend**: Vercel
+* **Backend**: Koyeb
+* **Database**: Neon Postgres or Supabase Postgres
+
+### Backend environment variables
+Deploy the `backend` directory to Koyeb. You can use the included Dockerfile, or use `npm run build` as the build command and `npm run start:deploy` as the run command.
+
+Set these in Koyeb:
+
+```bash
+DATABASE_URL="your-hosted-postgres-connection-string"
+JWT_SECRET="replace_with_a_strong_random_secret"
+JWT_EXPIRES_IN="7d"
+NODE_ENV="production"
+FRONTEND_URL="https://your-vercel-app.vercel.app"
+```
+
+For Neon, use the pooled connection string with SSL enabled if Neon provides it.
+
+The backend Dockerfile automatically runs `npx prisma db push` before starting the API.
+
+### Frontend environment variables
+Deploy the `frontend` directory to Vercel and set this environment variable:
+
+```bash
+NEXT_PUBLIC_API_URL="https://your-koyeb-backend.koyeb.app/api"
+```
+
+### One-time seed
+After the backend is connected to the hosted database, run the seed command once from the `backend` directory with `DATABASE_URL` pointing at the hosted database:
+
+```bash
+npm run prisma:seed
+```
+
+---
+
 ## 📊 Database Administration
 
-To visually view and inspect the SQLite database tables directly in your browser, start **Prisma Studio**:
+To visually view and inspect the PostgreSQL database tables directly in your browser, start **Prisma Studio**:
 ```bash
 cd backend
 npm run prisma:studio
