@@ -1,5 +1,7 @@
 # Nexus LMS - Enterprise Library Management System
 
+For customer-friendly setup, login, and usage instructions, see [CUSTOMER_MANUAL.md](CUSTOMER_MANUAL.md).
+
 Nexus LMS is a premium, enterprise-grade Library Management System designed for schools, universities, and corporate libraries. It provides a complete end-to-end workflow for managing physical book inventories, student/faculty membership profiles, and circulation desks (Point-of-Sale check-out/check-in, fine collections, and fee waivers).
 
 ---

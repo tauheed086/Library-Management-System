@@ -25,7 +25,7 @@ services:
       - "5000:5000"
     environment:
       PORT: 5000
-      DATABASE_URL: "ppostgresql://neondb_owner:npg_in0J1xrFuKzX@ep-sweet-wind-aiga6au9.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require"
+      DATABASE_URL: "postgresql://lms_user:lms_password@db:5432/lms_db?schema=public"
       JWT_SECRET: "super_secret_jwt_key_for_lms_system_2026_enterprise"
       JWT_EXPIRES_IN: "7d"
       NODE_ENV: "production"
