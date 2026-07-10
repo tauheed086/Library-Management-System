@@ -247,7 +247,8 @@ export default function CirculationPage() {
                               bookSuggestions.map((book) => (
                                 <div
                                   key={book.id}
-                                  onClick={() => {
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
                                     setIssueIsbn(book.isbn);
                                     setShowBookDropdown(false);
                                   }}
@@ -307,7 +308,8 @@ export default function CirculationPage() {
                               memberSuggestions.map((member) => (
                                 <div
                                   key={member.id}
-                                  onClick={() => {
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
                                     setIssueMemberId(member.id);
                                     setShowMemberDropdown(false);
                                   }}
