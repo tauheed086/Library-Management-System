@@ -52,6 +52,12 @@ export default function ForgotPasswordPage() {
       const res = await api.post('/auth/forgot-password', { email: data.email });
       setEmail(data.email);
       addToast(res.message || 'OTP verification code sent!', 'success');
+      
+      // Auto-show OTP if the backend returned it as a demo fallback
+      if (res.otp) {
+        addToast(`💡 Demo Notice: Since email dispatch could not complete, your code is: ${res.otp}`, 'info');
+      }
+
       setStep(2);
     } catch (err: any) {
       addToast(err.message || 'Failed to request OTP code', 'error');

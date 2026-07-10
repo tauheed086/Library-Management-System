@@ -221,9 +221,20 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
     otpStore.set(email.toLowerCase(), { otp, expiresAt });
 
     // Send email (or log it in dev)
-    await sendOTPEmail(email, otp);
+    const emailSent = await sendOTPEmail(email, otp);
 
     await logActivity(user.id, 'PASSWORD_FORGOT_REQUEST', { email: user.email }, req.ip);
+
+    // If email could not be sent (e.g. Resend sandbox restriction or local fallback),
+    // return the OTP in the API response to allow the demo flow to succeed.
+    if (!emailSent) {
+      return res.status(200).json({
+        success: true,
+        message: 'OTP verification code sent to your email (simulated)',
+        otp,
+        isDemoFallback: true
+      });
+    }
 
     res.status(200).json({
       success: true,
