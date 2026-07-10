@@ -2,6 +2,8 @@ import nodemailer from 'nodemailer';
 
 export const sendOTPEmail = async (email: string, otp: string): Promise<boolean> => {
   const brevoApiKey = process.env.BREVO_API_KEY;
+  const mailjetApiKey = process.env.MAILJET_API_KEY;
+  const mailjetSecretKey = process.env.MAILJET_SECRET_KEY;
   const sendgridApiKey = process.env.SENDGRID_API_KEY;
   const resendApiKey = process.env.RESEND_API_KEY;
   
@@ -48,7 +50,43 @@ export const sendOTPEmail = async (email: string, otp: string): Promise<boolean>
     }
   }
 
-  // 2. Try SendGrid API (Allows sending to anyone using a single verified sender email, free)
+  // 2. Try Mailjet API (Allows sending to anyone using a single verified sender email, free)
+  if (mailjetApiKey && mailjetSecretKey) {
+    console.log(`[Email] Attempting to send OTP email via Mailjet API to: ${email}`);
+    try {
+      const senderEmail = process.env.MAILJET_SENDER_EMAIL || process.env.SMTP_USER || 'no-reply@enterprise-lms.com';
+      const authHeader = 'Basic ' + Buffer.from(`${mailjetApiKey}:${mailjetSecretKey}`).toString('base64');
+      const response = await fetch('https://api.mailjet.com/v3.1/send', {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          Messages: [
+            {
+              From: { Email: senderEmail, Name: 'Enterprise LMS' },
+              To: [{ Email: email }],
+              Subject: 'Password Reset Verification Code - Enterprise LMS',
+              HTMLPart: htmlTemplate,
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = (await response.json()) as any;
+        throw new Error(errorData.ErrorMessage || `HTTP ${response.status}`);
+      }
+
+      console.log(`[Email] Email sent successfully via Mailjet API.`);
+      return true;
+    } catch (error) {
+      console.error(`[Email] Error sending email via Mailjet:`, error);
+    }
+  }
+
+  // 3. Try SendGrid API (Allows sending to anyone using a single verified sender email, free)
   if (sendgridApiKey) {
     console.log(`[Email] Attempting to send OTP email via SendGrid API to: ${email}`);
     try {
@@ -79,7 +117,7 @@ export const sendOTPEmail = async (email: string, otp: string): Promise<boolean>
     }
   }
 
-  // 3. Try Resend API (Bypasses SMTP port blocks, free sandbox but restricted to registered domain/email)
+  // 4. Try Resend API (Bypasses SMTP port blocks, free sandbox but restricted to registered domain/email)
   if (resendApiKey) {
     console.log(`[Email] Attempting to send OTP email via Resend API to: ${email}`);
     try {
@@ -111,7 +149,7 @@ export const sendOTPEmail = async (email: string, otp: string): Promise<boolean>
     }
   }
 
-  // 4. Try Standard SMTP Flow (Falls back to Ethereal Mail if SMTP details not found)
+  // 5. Try Standard SMTP Flow (Falls back to Ethereal Mail if SMTP details not found)
   const host = process.env.SMTP_HOST;
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
   const user = process.env.SMTP_USER;
