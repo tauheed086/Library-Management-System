@@ -5,6 +5,9 @@ import { prisma } from '../utils/db';
 import { AppError } from '../middleware/error.middleware';
 import { logActivity } from '../utils/audit';
 import { generateReadableUserId } from '../utils/idGenerator';
+import { sendOTPEmail } from '../utils/mail';
+
+const otpStore = new Map<string, { otp: string; expiresAt: number }>();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_for_lms_system_2026_enterprise';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -207,28 +210,24 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      // Return 200 for security reasons to prevent email enumeration
-      res.status(200).json({
-        success: true,
-        message: 'Password reset link sent to your email (simulated)'
-      });
-      return;
+      return next(new AppError('No user found with this email address', 404));
     }
 
-    // Mock reset token creation
-    const resetToken = jwt.sign(
-      { id: user.id, email: user.email, action: 'RESET_PASSWORD' },
-      JWT_SECRET,
-      { expiresIn: '1h' }
-    );
+    // Generate standard 6-digit numeric OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes from now
+
+    // Store in-memory
+    otpStore.set(email.toLowerCase(), { otp, expiresAt });
+
+    // Send email (or log it in dev)
+    await sendOTPEmail(email, otp);
 
     await logActivity(user.id, 'PASSWORD_FORGOT_REQUEST', { email: user.email }, req.ip);
 
-    // Normally send email here. We return the token for testing convenience in frontend mock flow.
     res.status(200).json({
       success: true,
-      message: 'Password reset link sent to your email (simulated)',
-      resetToken // Returned for development/demo ease
+      message: 'OTP verification code sent to your email'
     });
   } catch (error) {
     next(error);
@@ -237,23 +236,22 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
 
 export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword) {
-      return next(new AppError('Token and new password are required', 400));
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+      return next(new AppError('Email, OTP, and new password are required', 400));
     }
 
-    let decoded: any;
-    try {
-      decoded = jwt.verify(token, JWT_SECRET);
-    } catch (err) {
-      return next(new AppError('Invalid or expired password reset token', 400));
+    const stored = otpStore.get(email.toLowerCase());
+    if (!stored || stored.otp !== otp) {
+      return next(new AppError('Invalid OTP code', 400));
     }
 
-    if (decoded.action !== 'RESET_PASSWORD') {
-      return next(new AppError('Invalid token usage', 400));
+    if (stored.expiresAt < Date.now()) {
+      otpStore.delete(email.toLowerCase());
+      return next(new AppError('OTP has expired. Please request a new one.', 400));
     }
 
-    const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       return next(new AppError('User not found', 404));
     }
@@ -263,6 +261,9 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
       where: { id: user.id },
       data: { password: hashedPassword }
     });
+
+    // Clean up OTP
+    otpStore.delete(email.toLowerCase());
 
     await logActivity(user.id, 'PASSWORD_RESET', { email: user.email }, req.ip);
 
